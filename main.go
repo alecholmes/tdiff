@@ -16,6 +16,8 @@ var (
 	packageFlag = flag.String("package", "", "Package to find reachable diff from")
 	shaFlag     = flag.String("sha", "", "Git SHA")
 
+	verboseFlag = flag.Bool("verbose", false, "If set, log verbose debugging information")
+
 	// Output format flags
 	packagesFlag = flag.Bool("packages", false, "If set, all relevant changed packages printed")
 	filesFlag    = flag.Bool("files", false, "If set, all relevant changed files are printed")
@@ -31,12 +33,12 @@ func main() {
 
 	// TODO: Check that exactly one of the output flags is set.
 
-	packageNamer, err := newFullPackageNamer()
+	packageNamer, git, err := newGitPackageNamer(*packageFlag, *verboseFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	files, err := lib.DiffFiles(*shaFlag, "HEAD")
+	files, err := git.DiffFiles(*shaFlag, "HEAD")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,10 +51,13 @@ func main() {
 		}
 	}
 
-	reachablePackages, err := recursiveDeps(*packageFlag)
+	reachablePackages, err := recursiveDeps(packageFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Add given root package to the reachable set
+	reachablePackages = append(reachablePackages, *packageFlag)
 
 	relevantPackages := make(stringSet)
 	for _, pkg := range reachablePackages {
@@ -82,7 +87,7 @@ func main() {
 	}
 
 	if *commitsFlag {
-		commits, err := lib.Commits(*shaFlag, "HEAD")
+		commits, err := git.Commits(*shaFlag, "HEAD")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -94,7 +99,7 @@ func main() {
 
 		var relevantCommits []lib.GitCommit
 		for _, commit := range commits {
-			files, err := lib.CommitFiles(commit.SHA)
+			files, err := git.CommitFiles(commit.SHA)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -140,27 +145,41 @@ func (s stringSet) slice() []string {
 
 type fullPackagerNamer func(relativePackage string) string
 
-func newFullPackageNamer() (fullPackagerNamer, error) {
+func newGitPackageNamer(packageName string, verbose bool) (fullPackagerNamer, *lib.Git, error) {
 	srcDir := fmt.Sprintf("%s/src/", os.Getenv("GOPATH"))
-	wd, err := os.Getwd()
+	if verbose {
+		log.Printf("Using source directory: %s", srcDir)
+	}
+
+	git, err := lib.NewGitInDir(fmt.Sprintf("%s%s", srcDir, packageName))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if !strings.HasPrefix(wd, srcDir) {
-		return nil, fmt.Errorf("Expected working directoring to be under %s; working directory is %s", srcDir, wd)
+	if verbose {
+		log.Printf("Using git root: %s", git.RootDir)
 	}
 
-	packagePrefix := wd[len(srcDir):]
+	if !strings.HasPrefix(git.RootDir, srcDir) {
+		return nil, nil, fmt.Errorf("Expected git root to be under %s; working directory is %s", srcDir, git.RootDir)
+	}
+
+	packagePrefix := git.RootDir[len(srcDir):]
+	if verbose {
+		log.Printf("Prefixing packages with: %s", packagePrefix)
+	}
 
 	return func(relativePackage string) string {
-		// TODO: check for GOROOT builtins before prefixing
 		return fmt.Sprintf("%s/%s", packagePrefix, relativePackage)
-	}, nil
+	}, git, nil
 }
 
-func recursiveDeps(root string) ([]string, error) {
-	out, err := lib.RunCommand("go", "list", "-f", "'{{.Deps}}'", root)
+func recursiveDeps(root *string) ([]string, error) {
+	args := []string{"list", "-f", "'{{.Deps}}'"}
+	if root != nil {
+		args = append(args, *root)
+	}
+	out, err := lib.RunCommand("go", args...)
 	if err != nil {
 		return nil, err
 	}
@@ -170,8 +189,8 @@ func recursiveDeps(root string) ([]string, error) {
 	}
 
 	str := string(out)
-	// Assuming formats: [], [foo], [foo bar]
-	str = str[1 : len(str)-1]
+	// Assuming formats: '[]', '[foo]', '[foo bar]'
+	str = strings.Trim(str, "'[]\n")
 
 	return strings.Split(str, " "), nil
 }

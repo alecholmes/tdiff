@@ -6,9 +6,7 @@
 
 ## Uses
 
-`tdiff` must be called from a directory underneath `$GOPATH`.
-
-"Related" means recursively reachable from the package given to `tdiff`.
+"Related" means the package passed to `tdiff` and all recursively reachable packages.
 
 ### List related packages changed since the given SHA
 ```
@@ -31,13 +29,13 @@ If a package is changed after the given SHA and before being added as a dependen
 # Roadmap
 
 - Better README.
-- Cleaner, better documented code.
+- Cleaner code.
 - Better usage/help output.
 - Nice error messages.
 - Check that `git` and `go tool` are installed.
 - Flag to include non-Go files in output.
     - TBD: This may just include changed files recursively reachable from the directory of the given package.
-- Flag for verbose output.
+- Flag for verbose output (IN PROGRESS).
 - Unit tests.
 - Investigate: Correctly dealing with stdlib packages.
 - Investigate: Is it possible to use a library instead of shelling out to `go list`?
