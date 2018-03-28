@@ -29,7 +29,7 @@ func NewGit() (*Git, error) {
 func NewGitInDir(dir string) (*Git, error) {
 	rootDir, err := gitRootDir(dir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Unable to determine root of Git repository: %v", err)
 	}
 
 	return &Git{RootDir: rootDir}, nil

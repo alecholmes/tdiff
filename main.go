@@ -38,11 +38,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Find all files that changed since the given SHA.
+	// Not all files will be relevant, as some will be in unreachable packages.
 	files, err := git.DiffFiles(*shaFlag, "HEAD")
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Determine all the packages with changes.
 	changedPackageFiles := make(map[string][]string)
 	for _, file := range files {
 		if strings.HasSuffix(file, ".go") {
@@ -51,6 +54,7 @@ func main() {
 		}
 	}
 
+	// Find all packages recursively reachable from the given root package.
 	reachablePackages, err := recursiveDeps(packageFlag)
 	if err != nil {
 		log.Fatal(err)
@@ -59,6 +63,8 @@ func main() {
 	// Add given root package to the reachable set
 	reachablePackages = append(reachablePackages, *packageFlag)
 
+	// Determine relevant packages, where relevant is a package reachable from
+	// the root package that has also changed.
 	relevantPackages := make(stringSet)
 	for _, pkg := range reachablePackages {
 		if _, ok := changedPackageFiles[pkg]; ok {
@@ -92,6 +98,7 @@ func main() {
 			log.Fatal(err)
 		}
 
+		// Determine all files that changed in the relevant subset of changed packages.
 		relevantFiles := make(stringSet)
 		for pkg := range relevantPackages {
 			relevantFiles.add(changedPackageFiles[pkg]...)
@@ -99,13 +106,14 @@ func main() {
 
 		var relevantCommits []lib.GitCommit
 		for _, commit := range commits {
-			files, err := git.CommitFiles(commit.SHA)
+			commitFiles, err := git.CommitFiles(commit.SHA)
 			if err != nil {
 				log.Fatal(err)
 			}
 
+			// The commit should be included if any files in it were part of a relevant changed package.
 			relevant := false
-			for _, file := range files {
+			for _, file := range commitFiles {
 				if relevantFiles.contains(file) {
 					relevant = true
 					break
@@ -122,18 +130,23 @@ func main() {
 	}
 }
 
+// stringSet represents an unordered set of strings.
 type stringSet map[string]bool
 
+// add puts the given values into the set.
 func (s stringSet) add(values ...string) {
 	for _, v := range values {
 		s[v] = true
 	}
 }
 
+// contains returns true iff the set contains the given value.
+// s.contains("foo") and s["foo"] are equivalent.
 func (s stringSet) contains(value string) bool {
 	return s[value]
 }
 
+// slice returns an arbitrarily ordered slice that contains each value in the set.
 func (s stringSet) slice() []string {
 	values := make([]string, 0, len(s))
 	for v := range s {
@@ -143,9 +156,14 @@ func (s stringSet) slice() []string {
 	return values
 }
 
-type fullPackagerNamer func(relativePackage string) string
+// goPackagerNamer determines a full package name given a partial package name.
+type goPackagerNamer func(partialPackageName string) string
 
-func newGitPackageNamer(packageName string, verbose bool) (fullPackagerNamer, *lib.Git, error) {
+// newGitPackageNamer creates a goPackagerNamer and Git based on the current Go environment
+// and a given package name.
+// This function will attempt to use the GOPATH environment variable to figure out the root of
+// the Git repository the given package lives under.
+func newGitPackageNamer(packageName string, verbose bool) (goPackagerNamer, *lib.Git, error) {
 	srcDir := fmt.Sprintf("%s/src/", os.Getenv("GOPATH"))
 	if verbose {
 		log.Printf("Using source directory: %s", srcDir)
@@ -189,12 +207,15 @@ func recursiveDeps(root *string) ([]string, error) {
 	}
 
 	str := string(out)
-	// Assuming formats: '[]', '[foo]', '[foo bar]'
+	// This assumes that `go list` outputs as Go-formatted array of strings.
+	// E.g. '[]', '[foo]', '[foo bar]'
 	str = strings.Trim(str, "'[]\n")
 
 	return strings.Split(str, " "), nil
 }
 
+// goDirs take a list of filenames, filters out ones that are not Go source files,
+// and returns the set of parent directories of these files.
 func goDirs(files []string) stringSet {
 	dirSet := make(stringSet)
 	for _, file := range files {
