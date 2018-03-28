@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/alecholmes/tdiff/lib"
@@ -28,10 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Should od XOR check on output flags. Exactly one must be set.
-	// if !*packagesFlag && !*filesFlag && !*commitsFlag {
-	// 	log.Fatal("At least one output flag must be specified")
-	// }
+	// TODO: Check that exactly one of the output flags is set.
 
 	packageNamer, err := newFullPackageNamer()
 	if err != nil {
@@ -57,21 +55,29 @@ func main() {
 	}
 
 	relevantPackages := make(stringSet)
-	for _, pckage := range reachablePackages {
-		if _, ok := changedPackageFiles[pckage]; ok {
-			relevantPackages.add(pckage)
+	for _, pkg := range reachablePackages {
+		if _, ok := changedPackageFiles[pkg]; ok {
+			relevantPackages.add(pkg)
 		}
 	}
 
 	if *packagesFlag {
-		for pckage := range relevantPackages {
-			fmt.Println(pckage)
+		outPackages := relevantPackages.slice()
+		sort.Strings(outPackages)
+		for _, pkg := range outPackages {
+			fmt.Println(pkg)
 		}
 	}
 
 	if *filesFlag {
-		for pckage := range relevantPackages {
-			fmt.Println(strings.Join(changedPackageFiles[pckage], "\n"))
+		var outFiles []string
+		for pkg := range relevantPackages {
+			outFiles = append(outFiles, changedPackageFiles[pkg]...)
+		}
+
+		sort.Strings(outFiles)
+		for _, file := range outFiles {
+			fmt.Println(file)
 		}
 	}
 
@@ -82,8 +88,8 @@ func main() {
 		}
 
 		relevantFiles := make(stringSet)
-		for pckage := range relevantPackages {
-			relevantFiles.add(changedPackageFiles[pckage]...)
+		for pkg := range relevantPackages {
+			relevantFiles.add(changedPackageFiles[pkg]...)
 		}
 
 		var relevantCommits []lib.GitCommit
@@ -121,6 +127,15 @@ func (s stringSet) add(values ...string) {
 
 func (s stringSet) contains(value string) bool {
 	return s[value]
+}
+
+func (s stringSet) slice() []string {
+	values := make([]string, 0, len(s))
+	for v := range s {
+		values = append(values, v)
+	}
+
+	return values
 }
 
 type fullPackagerNamer func(relativePackage string) string

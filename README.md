@@ -35,7 +35,6 @@ If a package is changed after the given SHA and before being added as a dependen
 - Better usage/help output.
 - Nice error messages.
 - Check that `git` and `go tool` are installed.
-- Sorted output for -file and -packages options
 - Flag to include non-Go files in output.
     - TBD: This may just include changed files recursively reachable from the directory of the given package.
 - Flag for verbose output.
