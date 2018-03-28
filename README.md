@@ -24,10 +24,26 @@ tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -files
 tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -commits
 ```
 
-
 # Notes
 
 If a package is changed after the given SHA and before being added as a dependency, and does not change after this, irrelevant changes will be included.
+
+# Roadmap
+
+- Better README.
+- Cleaner, better documented code.
+- Better usage/help output.
+- Nice error messages.
+- Check that `git` and `go tool` are installed.
+- Sorted output for -file and -packages options
+- Flag to include non-Go files in output.
+    - TBD: This may just include changed files recursively reachable from the directory of the given package.
+- Flag for verbose output.
+- Unit tests.
+- Investigate: Correctly dealing with stdlib packages.
+- Investigate: Is it possible to use a library instead of shelling out to `go list`?
+- Investigate: Enumerate potential edge cases.
+- Investigate: Use kingpin instead of flag library? Alternatively, it is nice to not have third party dependencies.
 
 
 # License
