@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	packageFlag = flag.String("package", "", "Package to find reachable diff from")
-	shaFlag     = flag.String("sha", "", "Git SHA")
+	packageFlag   = flag.String("package", "", "Package to find reachable diff from")
+	shaFlag       = flag.String("sha", "", "Git SHA")
+	artifactsFlag = flag.Bool("artifacts", false, "If true, includes changed non-Go source files under the package directory, recursive")
 
 	verboseFlag = flag.Bool("verbose", false, "If set, log verbose debugging information")
 
@@ -47,10 +48,13 @@ func main() {
 
 	// Determine all the packages with changes.
 	changedPackageFiles := make(map[string][]string)
+	var changedArtifactFiles []string
 	for _, file := range files {
+		packageName := packageNamer(filepath.Dir(file))
 		if strings.HasSuffix(file, ".go") {
-			packageName := packageNamer(filepath.Dir(file))
 			changedPackageFiles[packageName] = append(changedPackageFiles[packageName], file)
+		} else if *artifactsFlag && selfOrChildPackage(packageName, *packageFlag) {
+			changedArtifactFiles = append(changedArtifactFiles, file)
 		}
 	}
 
@@ -81,7 +85,7 @@ func main() {
 	}
 
 	if *filesFlag {
-		var outFiles []string
+		outFiles := changedArtifactFiles
 		for pkg := range relevantPackages {
 			outFiles = append(outFiles, changedPackageFiles[pkg]...)
 		}
@@ -103,6 +107,7 @@ func main() {
 		for pkg := range relevantPackages {
 			relevantFiles.add(changedPackageFiles[pkg]...)
 		}
+		relevantFiles.add(changedArtifactFiles...)
 
 		var relevantCommits []lib.GitCommit
 		for _, commit := range commits {
@@ -190,6 +195,21 @@ func newGitPackageNamer(packageName string, verbose bool) (goPackagerNamer, *lib
 	return func(relativePackage string) string {
 		return fmt.Sprintf("%s/%s", packagePrefix, relativePackage)
 	}, git, nil
+}
+
+// Returns true if the given packageName is either the same package or a child
+// of selfOrParentPackageName.
+// selfOrParentPackageName("a/b", "a/b") == true
+// selfOrParentPackageName("a/b/c", "a/b") == true
+// selfOrParentPackageName("a", "a/b") == false
+func selfOrChildPackage(packageName, selfOrParentPackageName string) bool {
+	if !strings.HasPrefix(packageName, selfOrParentPackageName) {
+		return false
+	} else if len(packageName) == len(selfOrParentPackageName) {
+		return true
+	}
+
+	return packageName[len(selfOrParentPackageName)] == '/'
 }
 
 func recursiveDeps(root *string) ([]string, error) {

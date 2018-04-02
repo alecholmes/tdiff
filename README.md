@@ -40,6 +40,7 @@ If a package is changed after the given SHA and before being added as a dependen
 - Investigate: Correctly dealing with stdlib packages.
 - Investigate: Is it possible to use a library instead of shelling out to `go list`?
 - Investigate: Enumerate potential edge cases.
+    - Could internal or test packages cause problems?
 - Investigate: Use kingpin instead of flag library? Alternatively, it is nice to not have third party dependencies.
 
 
