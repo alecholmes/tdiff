@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -9,8 +10,26 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/alecholmes/tdiff/importer"
 	"github.com/alecholmes/tdiff/lib"
 )
+
+type Package struct {
+	Name         string   `json:"name"`
+	PathFromRoot []string `json:"pathFromRoot,omitempty"`
+}
+
+type Commit struct {
+	SHA              string     `json:"sha"`
+	Description      string     `json:"description"`
+	RelevantPackages []*Package `json:"relevantPackages,omitempty"`
+}
+
+type Summary struct {
+	Packages []*Package `json:"packages,omitempty"`
+	Commits  []*Commit  `json:"commits,omitempty"`
+	Files    []string   `json:"files,omitempty"`
+}
 
 var (
 	packageFlag   = flag.String("package", "", "Package to find reachable diff from")
@@ -23,6 +42,7 @@ var (
 	packagesFlag = flag.Bool("packages", false, "If set, all relevant changed packages printed")
 	filesFlag    = flag.Bool("files", false, "If set, all relevant changed files are printed")
 	commitsFlag  = flag.Bool("commits", false, "If set, all relevant commits are printed")
+	jsonFlag     = flag.Bool("json", false, "If set, JSON object representing all changes is printed")
 )
 
 func main() {
@@ -33,7 +53,6 @@ func main() {
 	}
 
 	// TODO: Check that exactly one of the output flags is set.
-
 	packageNamer, git, err := newGitPackageNamer(*packageFlag, *verboseFlag)
 	if err != nil {
 		log.Fatal(err)
@@ -48,18 +67,21 @@ func main() {
 
 	// Determine all the packages with changes.
 	changedPackageFiles := make(map[string][]string)
+	changedFilePackage := make(map[string]string)
 	var changedArtifactFiles []string
 	for _, file := range files {
 		packageName := packageNamer(filepath.Dir(file))
 		if strings.HasSuffix(file, ".go") {
 			changedPackageFiles[packageName] = append(changedPackageFiles[packageName], file)
+			changedFilePackage[file] = packageName
 		} else if *artifactsFlag && selfOrChildPackage(packageName, *packageFlag) {
 			changedArtifactFiles = append(changedArtifactFiles, file)
 		}
 	}
 
 	// Find all packages recursively reachable from the given root package.
-	reachablePackages, err := recursiveDeps(packageFlag)
+	//reachablePackages, err := recursiveDeps(packageFlag)
+	reachablePackages, packageGraph, err := newRecursiveDeps(*packageFlag)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,15 +98,38 @@ func main() {
 		}
 	}
 
-	if *packagesFlag {
+	summary := new(Summary)
+	packageSummaries := make(map[string]*Package)
+
+	if *packagesFlag || *jsonFlag {
 		outPackages := relevantPackages.slice()
 		sort.Strings(outPackages)
+
 		for _, pkg := range outPackages {
-			fmt.Println(pkg)
+			shortestPath, err := packageGraph.ShortestPath(*packageFlag, pkg)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if len(shortestPath) == 0 {
+				log.Fatalf("Expected path between %s and %s", *packageFlag, pkg)
+			}
+
+			if *jsonFlag {
+				packageSummary := &Package{
+					Name:         pkg,
+					PathFromRoot: shortestPath,
+				}
+				summary.Packages = append(summary.Packages, packageSummary)
+				packageSummaries[pkg] = packageSummary
+			}
+
+			if *packagesFlag {
+				fmt.Println(pkg)
+			}
 		}
 	}
 
-	if *filesFlag {
+	if *filesFlag || *jsonFlag {
 		outFiles := changedArtifactFiles
 		for pkg := range relevantPackages {
 			outFiles = append(outFiles, changedPackageFiles[pkg]...)
@@ -92,11 +137,17 @@ func main() {
 
 		sort.Strings(outFiles)
 		for _, file := range outFiles {
-			fmt.Println(file)
+			if *jsonFlag {
+				summary.Files = append(summary.Files, file)
+			}
+
+			if *filesFlag {
+				fmt.Println(file)
+			}
 		}
 	}
 
-	if *commitsFlag {
+	if *commitsFlag || *jsonFlag {
 		commits, err := git.Commits(*shaFlag, "HEAD")
 		if err != nil {
 			log.Fatal(err)
@@ -126,12 +177,44 @@ func main() {
 			}
 			if relevant {
 				relevantCommits = append(relevantCommits, commit)
+
+				if *jsonFlag {
+					commitPackageSet := make(stringSet)
+					for _, file := range commitFiles {
+						commitPackageSet.add(changedFilePackage[file])
+					}
+
+					commitPackages := commitPackageSet.slice()
+					sort.Strings(commitPackages)
+					var commitPackageSummaries []*Package
+					for _, commitPackage := range commitPackages {
+						if summary, ok := packageSummaries[commitPackage]; ok {
+							commitPackageSummaries = append(commitPackageSummaries, summary)
+						}
+					}
+
+					summary.Commits = append(summary.Commits, &Commit{
+						SHA:              commit.SHA,
+						Description:      commit.Description,
+						RelevantPackages: commitPackageSummaries,
+					})
+				}
 			}
 		}
 
-		for _, commit := range relevantCommits {
-			fmt.Printf("%s %s\n", commit.SHA, commit.Description)
+		if *commitsFlag {
+			for _, commit := range relevantCommits {
+				fmt.Printf("%s %s\n", commit.SHA, commit.Description)
+			}
 		}
+	}
+
+	if *jsonFlag {
+		body, err := json.MarshalIndent(summary, "", "  ")
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(string(body))
 	}
 }
 
@@ -210,6 +293,20 @@ func selfOrChildPackage(packageName, selfOrParentPackageName string) bool {
 	}
 
 	return packageName[len(selfOrParentPackageName)] == '/'
+}
+
+func newRecursiveDeps(packageName string) ([]string, *importer.PackageGraph, error) {
+	graph, err := importer.DefaultRecursiveImport(packageName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	packageNames := make([]string, 0, len(graph.Packages))
+	for name := range graph.Packages {
+		packageNames = append(packageNames, name)
+	}
+
+	return packageNames, graph, nil
 }
 
 func recursiveDeps(root *string) ([]string, error) {
