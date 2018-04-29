@@ -9,18 +9,33 @@
 "Related" means the package passed to `tdiff` and all recursively reachable packages.
 
 ### List related packages changed since the given SHA
+
 ```
 tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -packages
 ```
 
 ### List related files changed since the given SHA
+
 ```
 tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -files
 ```
+
 ### List Git commits since the given SHA that contain changes to related files
+
 ```
 tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -commits
 ```
+
+### Get JSON output for all of the above, and more
+
+```
+tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -json
+```
+
+The JSON output includes separate sections for packages, files, and commits.
+
+Additionally, each changed package also includes a path indicating how it is reachable from the given root path.
+
 
 # Notes
 
