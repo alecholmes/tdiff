@@ -53,8 +53,7 @@ If a package is changed after the given SHA and before being added as a dependen
 
 # Roadmap
 
-- Better README.
-- Cleaner code.
+- Better README, especially explaining what this project means by transitive diff.
 - Better usage/help output.
 - Nice error messages.
 - Check that `git` and `go tool` are installed.
@@ -63,7 +62,6 @@ If a package is changed after the given SHA and before being added as a dependen
 - Flag for verbose output (IN PROGRESS).
 - Unit tests.
 - Investigate: Correctly dealing with stdlib packages.
-- Investigate: Is it possible to use a library instead of shelling out to `go list`?
 - Investigate: Enumerate potential edge cases.
     - Could internal or test packages cause problems?
 - Investigate: Use kingpin instead of flag library? Alternatively, it is nice to not have third party dependencies.
