@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -25,6 +26,7 @@ var (
 	filesFlag    = flag.Bool("files", false, "If set, all relevant changed files are printed")
 	commitsFlag  = flag.Bool("commits", false, "If set, all relevant commits are printed")
 	jsonFlag     = flag.Bool("json", false, "If set, JSON object representing all changes is printed")
+	htmlFlag     = flag.Bool("html", false, "If set, an HTML summary is written to a temp file")
 )
 
 func main() {
@@ -34,7 +36,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	includePaths := *jsonFlag
+	includePaths := *jsonFlag || *htmlFlag
 	logger := app.NoLogging
 	if *verboseFlag {
 		logger = log.Printf
@@ -72,4 +74,37 @@ func main() {
 		}
 		fmt.Println(string(body))
 	}
+
+	if *htmlFlag {
+		fileName, err := writeHTML(summary)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(fileName)
+	}
+}
+
+func writeHTML(summary *app.Summary) (string, error) {
+	body, err := app.HTML(summary)
+	if err != nil {
+		return "", err
+	}
+
+	file, err := ioutil.TempFile("", summary.SHA)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	if _, err := file.Write(body); err != nil {
+		return "", err
+	}
+	file.Close()
+
+	newName := fmt.Sprintf("%s.html", file.Name())
+	if err := os.Rename(file.Name(), newName); err != nil {
+		return "", err
+	}
+
+	return newName, nil
 }
