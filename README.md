@@ -71,4 +71,5 @@ If a package is changed after the given SHA and before being added as a dependen
 
 # License
 
-This source code is open source through the GNU Affero General Public License v3.0. See the LICENSE file for full details or [this helpful summary](https://choosealicense.com/licenses/agpl-3.0/).
+This source code is open source through the GNU Lesser General Public License v3.0.
+See the [LICENSE](LICENSE) file for full details or [this helpful summary](https://choosealicense.com/licenses/lgpl-3.0/).
