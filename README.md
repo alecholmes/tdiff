@@ -36,6 +36,16 @@ The JSON output includes separate sections for packages, files, and commits.
 
 Additionally, each changed package also includes a path indicating how it is reachable from the given root path.
 
+### HTML Summary
+
+```
+# Prints the name of the HTML summary temp file:
+tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -html
+
+# Opens the HTML summary temp file:
+open $(tdiff -package your/app/list_utils -sha OLDER_GIT_SHA -html)
+```
+
 
 # Notes
 
