@@ -17,21 +17,21 @@ func NoLogging(string, ...interface{}) {}
 
 type Package struct {
 	ImportPath   string   `json:"name"`
-	PathFromRoot []string `json:"pathFromRoot,omitempty"`
+	PathFromRoot []string `json:"pathFromRoot"`
 }
 
 type Commit struct {
 	SHA              string     `json:"sha"`
 	Description      string     `json:"description"`
-	RelevantPackages []*Package `json:"relevantPackages,omitempty"`
+	RelevantPackages []*Package `json:"relevantPackages"`
 }
 
 type Summary struct {
-	RootImportPath string     `json:"rootImportPath,omitempty"`
-	SHA            string     `json:"sha,omitempty"`
-	Packages       []*Package `json:"packages,omitempty"`
-	Commits        []*Commit  `json:"commits,omitempty"`
-	Files          []string   `json:"files,omitempty"`
+	RootImportPath string     `json:"rootImportPath"`
+	SHA            string     `json:"sha"`
+	Packages       []*Package `json:"packages"`
+	Commits        []*Commit  `json:"commits"`
+	Files          []string   `json:"files"`
 }
 
 type Differ struct {
