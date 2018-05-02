@@ -23,7 +23,7 @@ type Package struct {
 type Commit struct {
 	SHA              string     `json:"sha"`
 	Description      string     `json:"description"`
-	RelevantPackages []*Package `json:"relevantPackages"`
+	RelevantPackages []*Package `json:"relevantPackages"` // This may be empty if only artifacts in non-Go subdirectories changed.
 }
 
 type Summary struct {
@@ -106,14 +106,11 @@ func (d *diff) determineRelevantPackages(goPath string, artifacts bool, logger L
 	// Determine all the packages with changes.
 	d.changedPackageFiles = make(map[string][]string)
 	d.changedFilePackage = make(map[string]string)
-	// var changedArtifactFiles []string
 	for _, file := range files {
-		packageName := packageNamer(filepath.Dir(file))
 		if strings.HasSuffix(file, ".go") {
+			packageName := packageNamer(filepath.Dir(file))
 			d.changedPackageFiles[packageName] = append(d.changedPackageFiles[packageName], file)
 			d.changedFilePackage[file] = packageName
-		} else if artifacts && sameOrChildImportPath(packageName, d.summary.RootImportPath) {
-			d.changedArtifactFiles = append(d.changedArtifactFiles, file)
 		}
 	}
 
@@ -134,6 +131,30 @@ func (d *diff) determineRelevantPackages(goPath string, artifacts bool, logger L
 	for _, pkg := range reachablePackages {
 		if _, ok := d.changedPackageFiles[pkg]; ok {
 			d.relevantPackages.Add(pkg)
+		}
+	}
+
+	// Add any artifact files that changed
+	if artifacts {
+		reachablePackageSet := make(lib.StringSet)
+		reachablePackageSet.Add(reachablePackages...)
+
+		for _, file := range files {
+			if !strings.HasSuffix(file, ".go") {
+				packageName := packageNamer(filepath.Dir(file))
+
+				// Not the most efficient way of doing this...
+				for _, reachablePackage := range reachablePackages {
+					if importPathNestedWithin(packageName, reachablePackage) {
+						d.changedArtifactFiles = append(d.changedArtifactFiles, file)
+
+						// Artifact files don't necessarily live in a real Go package
+						if reachablePackageSet.Contains(packageName) {
+							d.relevantPackages.Add(packageName)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -213,7 +234,7 @@ func (d *diff) determineCommits() error {
 
 			commitPackages := commitPackageSet.Slice()
 			sort.Strings(commitPackages)
-			var commitPackageSummaries []*Package
+			commitPackageSummaries := []*Package{}
 			for _, commitPackage := range commitPackages {
 				if summary, ok := d.packageSummaries[commitPackage]; ok {
 					commitPackageSummaries = append(commitPackageSummaries, summary)
@@ -262,19 +283,19 @@ func newGitPackageNamer(importPath, goPath string, logger Logger) (goPackagerNam
 	}, git, nil
 }
 
-// Returns true if the given import path is either the same package or a child
-// of selfOrParentImportPath.
-// sameOrChildImportPath("a/b", "a/b") == true
-// sameOrChildImportPath("a/b/c", "a/b") == true
-// sameOrChildImportPath("a", "a/b") == false
-func sameOrChildImportPath(importPath, sameOrParentImportPath string) bool {
-	if !strings.HasPrefix(importPath, sameOrParentImportPath) {
+// importPathNestedWithin returns true if the given import path is or starts with maybeOuterImportPath.
+// importPathNestedWithin("a/b", "a/b") == true
+// importPathNestedWithin("a/b/c", "a/b") == true
+// importPathNestedWithin("a/x", "a/b") == true
+// importPathNestedWithin("a", "a/b") == false
+func importPathNestedWithin(importPath, maybeOuterImportPath string) bool {
+	if !strings.HasPrefix(importPath, maybeOuterImportPath) {
 		return false
-	} else if len(importPath) == len(sameOrParentImportPath) {
+	} else if len(importPath) == len(maybeOuterImportPath) {
 		return true
 	}
 
-	return importPath[len(sameOrParentImportPath)] == '/'
+	return importPath[len(maybeOuterImportPath)] == '/'
 }
 
 func recursiveDeps(packageName string) ([]string, *importer.PackageGraph, error) {
