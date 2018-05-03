@@ -57,9 +57,8 @@ func (g *Git) DiffFiles(fromSHA, toSHA string) ([]string, error) {
 
 // Commits returns a list of commits after fromSHA through toSHA. E.g. (fromSha, toSHA].
 // Commits are ordered from newest to older.
-// TODO: does this handle commit messages with newlines?
 func (g *Git) Commits(fromSHA, toSHA string) ([]GitCommit, error) {
-	// TODO: no-merges as default is weird
+	// TODO: Is no-merges as default weird?
 	out, err := g.runGitCommand("log", `--pretty=format:%H;%s`, "--no-merges", fmt.Sprintf("%s..%s", fromSHA, toSHA))
 	if err != nil {
 		return nil, err
