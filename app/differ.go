@@ -281,6 +281,10 @@ func newGitPackageNamer(importPath, goPath string, logger Logger) (goPackagerNam
 	logger("Prefixing packages with: %s", packagePrefix)
 
 	return func(relativePackage string) string {
+		if len(relativePackage) == 0 || relativePackage == "." {
+			return packagePrefix
+		}
+
 		return fmt.Sprintf("%s/%s", packagePrefix, relativePackage)
 	}, git, nil
 }
