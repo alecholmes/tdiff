@@ -187,11 +187,13 @@ func (d *diff) createPackageSummaries(includePaths bool) error {
 }
 
 func (d *diff) determineRelevantFiles() {
-	outFiles := d.changedArtifactFiles
+	outFileSet := make(lib.StringSet)
+	outFileSet.Add(d.changedArtifactFiles...)
 	for pkg := range d.relevantPackages {
-		outFiles = append(outFiles, d.changedPackageFiles[pkg]...)
+		outFileSet.Add(d.changedPackageFiles[pkg]...)
 	}
 
+	outFiles := outFileSet.Slice()
 	sort.Strings(outFiles)
 	d.summary.Files = outFiles
 }
