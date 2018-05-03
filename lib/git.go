@@ -35,7 +35,7 @@ func NewGitInDir(dir string) (*Git, error) {
 	return &Git{RootDir: rootDir}, nil
 }
 
-// DiffFiles returns list of files that were changed between fromSHA and toSHA, inclusive.
+// DiffFiles returns list of files that were changed after fromSHA through toSHA. E.g. (fromSha, toSHA].
 // The file names are relative to the root of the Go repository.
 func (g *Git) DiffFiles(fromSHA, toSHA string) ([]string, error) {
 	out, err := g.runGitCommand("diff", "--name-only", fmt.Sprintf("%s..%s", fromSHA, toSHA))
@@ -55,7 +55,7 @@ func (g *Git) DiffFiles(fromSHA, toSHA string) ([]string, error) {
 	return files, nil
 }
 
-// Commits returns a list of commits between fromSHA and toSHA, inclusive.
+// Commits returns a list of commits after fromSHA through toSHA. E.g. (fromSha, toSHA].
 // Commits are ordered from newest to older.
 // TODO: does this handle commit messages with newlines?
 func (g *Git) Commits(fromSHA, toSHA string) ([]GitCommit, error) {

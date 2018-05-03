@@ -15,7 +15,7 @@ import (
 var (
 	// Required input flags
 	packageFlag = flag.String("package", "", "Package to find reachable diff from")
-	shaFlag     = flag.String("sha", "", "Git SHA")
+	shaFlag     = flag.String("sha", "", "Git SHA after which changes will be considered (exclusive)")
 
 	// Optional flags
 	artifactsFlag = flag.Bool("artifacts", false, "If true, includes changed non-Go source files under the package directory, recursive")

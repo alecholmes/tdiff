@@ -96,6 +96,19 @@ func (d *diff) determineRelevantPackages(goPath string, artifacts bool, logger L
 		return err
 	}
 
+	// Find all packages recursively reachable from the given root package.
+	reachablePackages, packageGraph, err := recursiveDeps(d.summary.RootImportPath)
+	if err != nil {
+		return err
+	}
+	d.graph = packageGraph
+
+	// Add given root package to the reachable set
+	reachablePackages = append(reachablePackages, d.summary.RootImportPath)
+
+	reachablePackageSet := make(lib.StringSet)
+	reachablePackageSet.Add(reachablePackages...)
+
 	// Find all files that changed since the given SHA.
 	// Not all files will be relevant, as some will be in unreachable packages.
 	files, err := git.DiffFiles(d.summary.SHA, "HEAD")
@@ -107,23 +120,13 @@ func (d *diff) determineRelevantPackages(goPath string, artifacts bool, logger L
 	d.changedPackageFiles = make(map[string][]string)
 	d.changedFilePackage = make(map[string]string)
 	for _, file := range files {
-		if strings.HasSuffix(file, ".go") {
-			packageName := packageNamer(filepath.Dir(file))
+		// For non-Go source files, some derived package names might not be actual Go packages.
+		packageName := packageNamer(filepath.Dir(file))
+		if reachablePackageSet.Contains(packageName) {
 			d.changedPackageFiles[packageName] = append(d.changedPackageFiles[packageName], file)
 			d.changedFilePackage[file] = packageName
 		}
 	}
-
-	// Find all packages recursively reachable from the given root package.
-	//reachablePackages, err := recursiveDeps(packageFlag)
-	reachablePackages, packageGraph, err := recursiveDeps(d.summary.RootImportPath)
-	if err != nil {
-		return err
-	}
-	d.graph = packageGraph
-
-	// Add given root package to the reachable set
-	reachablePackages = append(reachablePackages, d.summary.RootImportPath)
 
 	// Determine relevant packages, where relevant is a package reachable from
 	// the root package that has also changed.
@@ -136,9 +139,6 @@ func (d *diff) determineRelevantPackages(goPath string, artifacts bool, logger L
 
 	// Add any artifact files that changed
 	if artifacts {
-		reachablePackageSet := make(lib.StringSet)
-		reachablePackageSet.Add(reachablePackages...)
-
 		for _, file := range files {
 			if !strings.HasSuffix(file, ".go") {
 				packageName := packageNamer(filepath.Dir(file))
